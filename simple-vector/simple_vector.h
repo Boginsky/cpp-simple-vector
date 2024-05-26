@@ -4,7 +4,7 @@
 #include <string>
 #include <stdexcept>
 #include <utility>
- 
+
 #include "array_ptr.h"
 
 using namespace std::literals;
@@ -25,19 +25,13 @@ public:
 
     SimpleVector() noexcept = default;
 
-    // Создаёт вектор из size элементов, инициализированных значением по умолчанию
-    explicit SimpleVector(size_t size) 
-    : size_(size), capacity_(size), data_(size) {
-        std::fill(data_.Get(), data_.Get() + size_, Type());
-    }
-    
     SimpleVector(ReserveProxyObj obj) {
         capacity_ = obj.capacity;
         Reserve(capacity_);
     }
 
     // Создаёт вектор из size элементов, инициализированных значением value
-    SimpleVector(size_t size, const Type& value) 
+    SimpleVector(size_t size, const Type& value = {}) 
     : size_(size), capacity_(size), data_(size) {
         std::fill(data_.Get(), data_.Get() + size_, value);
     }
@@ -66,6 +60,10 @@ public:
             return *this;
         }
         
+        if (other.size_ == 0) {
+            return *this;
+        }
+                
         size_ = std::exchange(other.size_, 0);
         capacity_ = std::exchange(other.capacity_, 0);
         data_ = std::move(other.data_);
@@ -137,13 +135,7 @@ public:
     // При увеличении размера новые элементы получают значение по умолчанию для типа Type
     void Resize(size_t new_size) {
         if (new_size > capacity_) {
-            auto temp = ArrayPtr<Type>(new_size);
-            
-            std::generate(temp.Get(), temp.Get() + new_size, []() { return Type(); });
-            std::move(data_.Get(), data_.Get() + size_, temp.Get());
-            
-            data_.swap(temp);
-            capacity_ = new_size;
+            Reserve(new_size);
         }
         
         if (new_size > size_) {
@@ -156,13 +148,7 @@ public:
     void PushBack(const Type& element) {
         if (size_ >= capacity_) {
             size_t increased_capacity = capacity_ == 0 ? 1 : capacity_ * 2;
-            ArrayPtr<Type> temp(increased_capacity);
-            
-            std::fill(temp.Get(), temp.Get() + increased_capacity, Type());
-            std::copy(data_.Get(), data_.Get() + size_, temp.Get());
-            
-            data_.swap(temp);
-            capacity_ = increased_capacity;
+            Reserve(increased_capacity);
         }
         
         data_[size_] = element;
@@ -172,13 +158,7 @@ public:
     void PushBack(Type&& element) {
         if (size_ >= capacity_) {
             size_t increased_capacity = capacity_ == 0 ? 1 : capacity_ * 2;
-            ArrayPtr<Type> temp(increased_capacity);
-            
-            std::generate(temp.Get(), temp.Get() + increased_capacity, []() { return Type(); });
-            std::move(data_.Get(), data_.Get() + size_, temp.Get());
-            
-            data_.swap(temp);
-            capacity_ = increased_capacity;
+            Reserve(increased_capacity);
         }
         
         data_[size_] = std::move(element);
@@ -195,8 +175,8 @@ public:
         }
     
         ArrayPtr<Type> new_data(reserved_capacity);
-        std::fill(new_data.Get(), new_data.Get() + capacity_, Type());
-        std::copy(data_.Get(), data_.Get() + size_, new_data.Get());
+        std::generate(new_data.Get(), new_data.Get() + reserved_capacity, []() { return Type(); });
+        std::move(data_.Get(), data_.Get() + size_, new_data.Get());
         data_.swap(new_data);
         capacity_ = reserved_capacity;
     }
@@ -332,7 +312,7 @@ bool operator<(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
 
 template <typename Type>
 bool operator<=(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
-    return lhs < rhs || lhs == rhs;
+    return !(rhs < lhs);
 }
 
 template <typename Type>
@@ -342,5 +322,5 @@ bool operator>(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
 
 template <typename Type>
 bool operator>=(const SimpleVector<Type>& lhs, const SimpleVector<Type>& rhs) {
-    return (rhs < lhs) || (rhs == lhs);
+    return !(lhs < rhs);
 }
